@@ -41,6 +41,24 @@ if st.session_state.authentication_status != True:
     # Stop app if not logged in
     st.stop()
 
+import os
+from sqlalchemy import create_engine
+from dotenv import load_dotenv
+
+load_dotenv()
+db_url = os.getenv("SUPABASE_DB_URL")
+
+if not db_url:
+    st.error("🚨 SUPABASE_DB_URL is not set in environment.")
+else:
+    st.info(f"🔐 DB URL loaded from secrets (masked): {db_url[:35]}...")
+
+try:
+    engine = create_engine(db_url)
+except Exception as e:
+    st.error(f"❌ Failed to connect to DB: {e}")
+
+
 # --- Load environment and connect to DB ---
 load_dotenv()
 db_url = os.getenv("SUPABASE_DB_URL")
