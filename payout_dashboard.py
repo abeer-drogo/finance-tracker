@@ -1,4 +1,10 @@
 import streamlit as st
+st.set_page_config(
+    page_title="trakpe",
+    page_icon="trakpe_favicon_32x32.png",  # Relative path to your favicon
+    layout="centered",  # or "wide"
+    initial_sidebar_state="auto"
+)
 import hashlib
 import pandas as pd
 from sqlalchemy import create_engine
@@ -38,31 +44,17 @@ if st.session_state.authentication_status != True:
                 st.session_state.authentication_status = False
                 st.warning("Incorrect username or password.")
 
-    # Stop app if not logged in
     st.stop()
 
-import os
-from sqlalchemy import create_engine
-from dotenv import load_dotenv
-
+# --- Load environment and connect to DB ---
 load_dotenv()
 db_url = os.getenv("SUPABASE_DB_URL")
-
-if not db_url:
-    st.error("🚨 SUPABASE_DB_URL is not set in environment.")
-else:
-    st.info(f"🔐 DB URL loaded from secrets (masked): {db_url[:35]}...")
 
 try:
     engine = create_engine(db_url)
 except Exception as e:
     st.error(f"❌ Failed to connect to DB: {e}")
-
-
-# --- Load environment and connect to DB ---
-load_dotenv()
-db_url = os.getenv("SUPABASE_DB_URL")
-engine = create_engine(db_url)
+    st.stop()
 
 # --- UI Title ---
 st.title(f"📊 Welcome {st.session_state.username} — Creator Payout Dashboard")
@@ -75,15 +67,12 @@ if st.session_state.username == "admin":
             upload_month = st.text_input("Enter month in format YYYY-MM (e.g., 2025-04)")
             submit_upload = st.form_submit_button("Upload")
 
-            # CSV guidance
             st.info("""
             **Expected CSV columns:**
 
             `Author ID`, `User ID`, `Email ID`, `Phone number`, `Langauge`, `Amount`,  
             `TDS Applicability`, `TDS`, `Payable`, `Net Payable`, `Name`,  
             `Account Number`, `IFSC`, `Transaction ID`, `Transaction Date`
-
-            ✅ Headers are case-insensitive and auto-cleaned (spaces → underscores).
             """)
 
             if submit_upload:
@@ -115,17 +104,24 @@ if st.session_state.username == "admin":
                                     st.warning("⚠️ Could not convert 'Transaction Date' — check format.")
 
                             df['month'] = upload_month
+
+                            # Validate required columns before upload
+                            required_cols = ['user_id', 'amount', 'net_payable', 'transaction_id', 'transaction_date', 'month']
+                            if not all(col in df.columns for col in required_cols):
+                                st.error("❌ Uploaded file is missing required columns.")
+                                st.stop()
+
                             df.to_sql('payouts', engine, if_exists='append', index=False)
                             st.success(f"✅ Uploaded {len(df)} records for {upload_month}")
+                            st.cache_data.clear()  # Clear cache after upload
+
                         except Exception as e:
                             st.error(f"❌ Upload failed: {e}")
 
-
-# --- Filter UI ---
+# --- Sidebar Filters ---
 st.sidebar.header("🔍 Search & Filters")
 search_input = st.sidebar.text_input("Author ID / User ID / Email")
 
-# Refresh button
 st.sidebar.markdown("---")
 if st.sidebar.button("🔄 Refresh Data"):
     st.cache_data.clear()
@@ -163,12 +159,9 @@ if show_only_uncredited:
 # --- Display Table ---
 st.subheader("📋 Filtered Payout Records")
 st.write(f"Total Records: {len(df)}")
-# Show only selected columns in the dashboard
 display_columns = ['user_id', 'amount', 'net_payable', 'transaction_id', 'transaction_date', 'month']
 df_display = df[display_columns] if all(col in df.columns for col in display_columns) else df
-
 st.dataframe(df_display)
-
 
 # --- Chart: Net Payable by Month ---
 if not df.empty:
@@ -186,4 +179,17 @@ if not df.empty:
     csv = df.to_csv(index=False).encode('utf-8')
     st.download_button("⬇️ Download CSV", csv, "filtered_payouts.csv", "text/csv")
 
-st.caption("Built with ❤️ using Streamlit")
+with st.sidebar:
+    st.markdown("---")
+    st.markdown("<br><br>", unsafe_allow_html=True)
+    st.markdown("""
+    🛠️ **Built by someone who don't know what to do with their time.**  
+    This exists solely because someone from the language team nearly rage-quit trying to find author earnings in a cursed Google sheet.
+
+    Am I a dev? No. Do I know what I’m doing? Also no.  
+    But this dashboard? It works. Kind of. Mostly. Don’t ask questions.
+
+    _Built in 10 hours. Debugged in 30 minutes. Mentally processed in 3–5 business days._
+    """)
+
+
